@@ -3588,9 +3588,12 @@ export class ZodDefaultOnMismatch<T extends ZodTypeAny> extends ZodType<
 > {
   _parse(input: ParseInput): ParseReturnType<this["_output"]> {
     const { ctx } = this._processInputParams(input);
-    const innerType = getParsedType(this._def.defaultValue());
+    const defaultValue = this._def.defaultValue();
     return this._def.innerType._parse({
-      data: ctx.parsedType !== innerType ? this._def.defaultValue() : ctx.data,
+      data:
+        ctx.parsedType !== getParsedType(defaultValue)
+          ? defaultValue
+          : ctx.data,
       path: ctx.path,
       parent: ctx,
     });
