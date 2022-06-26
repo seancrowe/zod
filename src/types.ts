@@ -369,6 +369,7 @@ export abstract class ZodType<
     this.and = this.and.bind(this);
     this.transform = this.transform.bind(this);
     this.default = this.default.bind(this);
+    this.defaultOnMismatch = this.defaultOnMismatch.bind(this);
     this.describe = this.describe.bind(this);
     this.isNullable = this.isNullable.bind(this);
     this.isOptional = this.isOptional.bind(this);
@@ -417,6 +418,20 @@ export abstract class ZodType<
       innerType: this,
       defaultValue: defaultValueFunc,
       typeName: ZodFirstPartyTypeKind.ZodDefault,
+    }) as any;
+  }
+
+  defaultOnMismatch(def: util.noUndefined<Input>): ZodDefaultOnMismatch<this>;
+  defaultOnMismatch(
+    def: () => util.noUndefined<Input>
+  ): ZodDefaultOnMismatch<this>;
+  defaultOnMismatch(def: any) {
+    const defaultValueFunc = typeof def === "function" ? def : () => def;
+
+    return new ZodDefaultOnMismatch({
+      innerType: this,
+      defaultValue: defaultValueFunc,
+      typeName: ZodFirstPartyTypeKind.ZodDefaultOnMismatch,
     }) as any;
   }
 
@@ -3552,6 +3567,51 @@ export class ZodDefault<T extends ZodTypeAny> extends ZodType<
   };
 }
 
+////////////////////////////////////////////
+////////////////////////////////////////////
+//////////                        //////////
+//////////  ZodDefaultOnMismatch  //////////
+//////////                        //////////
+////////////////////////////////////////////
+////////////////////////////////////////////
+export interface ZodDefaultOnMismatchDef<T extends ZodTypeAny = ZodTypeAny>
+  extends ZodTypeDef {
+  innerType: T;
+  defaultValue: () => util.noUndefined<T["_input"]>;
+  typeName: ZodFirstPartyTypeKind.ZodDefaultOnMismatch;
+}
+
+export class ZodDefaultOnMismatch<T extends ZodTypeAny> extends ZodType<
+  util.noUndefined<T["_output"]>,
+  ZodDefaultOnMismatchDef<T>,
+  T["_input"] | undefined
+> {
+  _parse(input: ParseInput): ParseReturnType<this["_output"]> {
+    const { ctx } = this._processInputParams(input);
+    const innerType = getParsedType(this._def.defaultValue());
+    return this._def.innerType._parse({
+      data: ctx.parsedType !== innerType ? this._def.defaultValue() : ctx.data,
+      path: ctx.path,
+      parent: ctx,
+    });
+  }
+
+  removeDefault() {
+    return this._def.innerType;
+  }
+
+  static create = <T extends ZodTypeAny>(
+    type: T,
+    params?: RawCreateParams
+  ): ZodOptional<T> => {
+    return new ZodOptional({
+      innerType: type,
+      typeName: ZodFirstPartyTypeKind.ZodOptional,
+      ...processCreateParams(params),
+    }) as any;
+  };
+}
+
 /////////////////////////////////////////
 /////////////////////////////////////////
 //////////                     //////////
@@ -3641,6 +3701,7 @@ export enum ZodFirstPartyTypeKind {
   ZodOptional = "ZodOptional",
   ZodNullable = "ZodNullable",
   ZodDefault = "ZodDefault",
+  ZodDefaultOnMismatch = "ZodDefaultOnMismatch",
   ZodPromise = "ZodPromise",
 }
 export type ZodFirstPartySchemaTypes =
@@ -3674,6 +3735,7 @@ export type ZodFirstPartySchemaTypes =
   | ZodOptional<any>
   | ZodNullable<any>
   | ZodDefault<any>
+  | ZodDefaultOnMismatch<any>
   | ZodPromise<any>;
 
 const instanceOfType = <T extends new (...args: any[]) => any>(
